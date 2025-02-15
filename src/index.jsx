@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { CssBaseline, MuiThemeProvider } from '@material-ui/core';
 import * as Sentry from '@sentry/react';
+import { HelmetProvider } from 'react-helmet-async';
 
 import './index.css';
 import App from './App';
@@ -25,6 +26,8 @@ if (import.meta.env.VITE_APP_GIT_COMMIT_TIMESTAMP) {
 ReactDOM.createRoot(document.getElementById('root')).render((
   <MuiThemeProvider theme={Theme}>
     <CssBaseline />
-    <App />
+    <HelmetProvider>
+      <App />
+    </HelmetProvider>
   </MuiThemeProvider>
 ));

@@ -5,6 +5,7 @@ import { CircularProgress, Typography } from '@material-ui/core';
 import debounce from 'debounce';
 import Obstruction from 'obstruction';
 import ReactPlayer from 'react-player/file';
+import { Helmet } from 'react-helmet-async';
 
 import { video as Video } from '@commaai/api';
 
@@ -63,6 +64,7 @@ class DriveVideo extends Component {
     this.onHlsError = this.onHlsError.bind(this);
     this.onVideoError = this.onVideoError.bind(this);
     this.onVideoResume = this.onVideoResume.bind(this);
+    this.onVideoReady = this.onVideoReady.bind(this);
     this.syncVideo = debounce(this.syncVideo.bind(this), 200, true);
     this.firstSeek = true;
 
@@ -71,6 +73,7 @@ class DriveVideo extends Component {
     this.state = {
       src: null,
       videoError: null,
+      frameUrl: "",
     };
   }
 
@@ -270,33 +273,86 @@ class DriveVideo extends Component {
     return Math.max(0, offset);
   }
 
+  onVideoReady = () => {
+    const player = this.videoPlayer.current;
+    if (!player) return null;
+
+    const videoElement = player.getInternalPlayer();
+    if (!videoElement) return null;
+
+    if (videoElement.readyState < 4) {
+      videoElement.addEventListener('canplay', () => {
+        videoElement.currentTime = 0;
+
+        setTimeout(() => {
+          const canvas = document.createElement('canvas');
+          canvas.width = videoElement.clientWidth || 1920;
+          canvas.height = videoElement.clientHeight || 1080;
+
+          const ctx = canvas.getContext('2d');
+          try {
+            ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+            const frameUrl = canvas.toDataURL('image/jpeg', 1.0);
+            this.setState({ frameUrl });
+            return frameUrl;
+          } catch (err) {
+            console.error('Error capturing frame:', err);
+            return null;
+          }
+        }, 1000);
+      }, { once: true });
+      return null;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = videoElement.clientWidth || 1920;
+    canvas.height = videoElement.clientHeight || 1080;
+
+    const ctx = canvas.getContext('2d');
+    try {
+      ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+      const frameUrl = canvas.toDataURL('image/jpeg', 1.0);
+      this.setState({ frameUrl });
+      return frameUrl;
+    } catch (err) {
+      console.error('Error capturing frame:', err);
+      return null;
+    }
+  }
+
   render() {
     const { desiredPlaySpeed, isBufferingVideo, currentRoute } = this.props;
-    const { src, videoError } = this.state;
+    const { src, videoError, frameUrl} = this.state;
     return (
-      <div className="min-h-[200px] relative max-w-[964px] m-[0_auto] aspect-[1.593]">
-        <VideoOverlay loading={isBufferingVideo} error={videoError} />
-        <ReactPlayer
-          ref={this.videoPlayer}
-          url={src}
-          playsinline
-          muted
-          width="100%"
-          height="100%"
-          playing={Boolean(currentRoute && desiredPlaySpeed)}
-          config={{
-            hlsVersion: '1.4.8',
-            hlsOptions: {
-              maxBufferLength: 40,
-            },
-          }}
-          playbackRate={desiredPlaySpeed}
-          onBuffer={this.onVideoBuffering}
-          onBufferEnd={this.onVideoResume}
-          onPlay={this.onVideoResume}
-          onError={this.onVideoError}
-        />
-      </div>
+      <>
+        <Helmet>
+          {frameUrl && <meta property="og:image" content={frameUrl} />}
+        </Helmet>
+        <div className="min-h-[200px] relative max-w-[964px] m-[0_auto] aspect-[1.593]">
+          <VideoOverlay loading={isBufferingVideo} error={videoError} />
+          <ReactPlayer
+            ref={this.videoPlayer}
+            url={src}
+            playsinline
+            muted
+            width="100%"
+            height="100%"
+            playing={Boolean(currentRoute && desiredPlaySpeed)}
+            config={{
+              hlsVersion: '1.4.8',
+              hlsOptions: {
+                maxBufferLength: 40,
+              },
+            }}
+            playbackRate={desiredPlaySpeed}
+            onBuffer={this.onVideoBuffering}
+            onBufferEnd={this.onVideoResume}
+            onReady={this.onVideoReady}
+            onPlay={this.onVideoResume}
+            onError={this.onVideoError}
+          />
+        </div>
+      </>
     );
   }
 }
